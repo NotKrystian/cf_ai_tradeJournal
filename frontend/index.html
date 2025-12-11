@@ -18,7 +18,7 @@
     }
     .app {
       width: 100%;
-      max-width: 900px;
+      max-width: 1000px;
       background: rgba(15, 23, 42, 0.95);
       border-radius: 16px;
       padding: 16px;
@@ -264,6 +264,107 @@
     .status.error {
       color: #f97373;
     }
+
+    /* Trades table mode */
+    .trades-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .trades-header-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .trades-header-sub {
+      font-size: 0.78rem;
+      color: #9ca3af;
+    }
+    .trades-refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+    }
+    .trades-refresh button {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      font-size: 0.8rem;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .trades-refresh button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .trades-table-wrapper {
+      flex: 1;
+      overflow: auto;
+      margin-top: 4px;
+    }
+    table.trades-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      min-width: 600px;
+    }
+    table.trades-table thead {
+      position: sticky;
+      top: 0;
+      background: rgba(15, 23, 42, 0.98);
+      z-index: 1;
+    }
+    table.trades-table th,
+    table.trades-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(30, 64, 175, 0.5);
+      text-align: left;
+      vertical-align: top;
+    }
+    table.trades-table th {
+      font-weight: 600;
+      color: #e5e7eb;
+      font-size: 0.78rem;
+    }
+    table.trades-table tbody tr:nth-child(even) {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .trade-reason {
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+    }
+    .badge.win {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+    .badge.loss {
+      border-color: #f97373;
+      color: #f97373;
+    }
+    .badge.breakeven {
+      border-color: #e5e7eb;
+      color: #e5e7eb;
+    }
+    .trades-empty {
+      font-size: 0.82rem;
+      color: #9ca3af;
+      padding: 12px 4px;
+    }
   </style>
 </head>
 <body>
@@ -272,12 +373,13 @@
       <div class="title-block">
         <div class="title">Trade Journal Coach</div>
         <div class="subtitle">
-          Backend: <span>app.k-kasperski.workers.dev</span> — log trades & analyze via Llama.
+          Backend: <span>app.k-kasperski.workers.dev</span> — log, review & analyze your trades.
         </div>
       </div>
       <div class="mode-toggle">
         <button type="button" class="mode-btn active" data-mode="coach">Coach</button>
         <button type="button" class="mode-btn" data-mode="log">Log Trade</button>
+        <button type="button" class="mode-btn" data-mode="trades">Trades</button>
       </div>
     </header>
 
@@ -306,7 +408,7 @@
         <div class="section-title">Log a new trade</div>
         <div class="form-grid">
           <div class="field">
-            <label for="entered-at">Time entered</label>
+            <label for="entered-at">Time entered *</label>
             <input type="datetime-local" id="entered-at" required />
             <small>When you opened the trade</small>
           </div>
@@ -341,7 +443,7 @@
           </div>
 
           <div class="field" style="grid-column: 1 / -1;">
-            <label for="reason-open">Reasoning at open</label>
+            <label for="reason-open">Reasoning at open *</label>
             <textarea id="reason-open" required placeholder="Setup, confluence, risk, why you took it..."></textarea>
           </div>
 
@@ -357,26 +459,62 @@
         </div>
       </form>
     </main>
+
+    <!-- TRADES MODE -->
+    <main id="trades-mode" class="main-section">
+      <div class="trades-header">
+        <div>
+          <div class="trades-header-title">Your trades</div>
+          <div id="trades-summary" class="trades-header-sub">
+            Loading…
+          </div>
+        </div>
+        <div class="trades-refresh">
+          <button id="trades-refresh-btn" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="trades-table-wrapper">
+        <div id="trades-empty" class="trades-empty" style="display:none;">
+          No trades yet. Log a few trades, then come back here.
+        </div>
+        <table class="trades-table" id="trades-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Entered</th>
+              <th>Exited</th>
+              <th>Outcome</th>
+              <th>% Risked</th>
+              <th>% Return</th>
+              <th>Reason (open)</th>
+              <th>Reason (close)</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody"></tbody>
+        </table>
+      </div>
+    </main>
   </div>
 
   <script>
     const API_BASE = "https://app.k-kasperski.workers.dev";
 
-    // Mode switching
+    // ===== Mode switching =====
     const modeButtons = document.querySelectorAll(".mode-btn");
     const coachSection = document.getElementById("coach-mode");
     const logSection = document.getElementById("log-mode");
+    const tradesSection = document.getElementById("trades-mode");
 
     function setMode(mode) {
       modeButtons.forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.mode === mode);
       });
-      if (mode === "coach") {
-        coachSection.classList.add("active");
-        logSection.classList.remove("active");
-      } else {
-        logSection.classList.add("active");
-        coachSection.classList.remove("active");
+
+      coachSection.classList.toggle("active", mode === "coach");
+      logSection.classList.toggle("active", mode === "log");
+      tradesSection.classList.toggle("active", mode === "trades");
+
+      if (mode === "trades") {
+        loadTrades();
       }
     }
 
@@ -473,7 +611,7 @@
     addMessage(
       "assistant",
       "Hey, I’m your trading coach. Your trades are stored in D1 via the /trades API.\n\n" +
-      "Use **Log Trade** mode to record new trades, then come back here and ask things like:\n" +
+      "Use **Log Trade** mode to record new trades, view them in **Trades**, then come back here and ask things like:\n" +
       "• “What are my biggest recurring mistakes?”\n" +
       "• “How should I adjust my risk next week?”\n" +
       "• “Summarize my last 10 trades into 3 key lessons.”"
@@ -494,7 +632,6 @@
 
     function toIsoOrNull(value) {
       if (!value) return null;
-      // datetime-local => treat as local, convert to ISO string
       const d = new Date(value);
       if (isNaN(d.getTime())) return null;
       return d.toISOString();
@@ -547,9 +684,9 @@
           throw new Error(err.error || `HTTP ${res.status}`);
         }
 
-        setStatus("Trade saved. You can now analyze it in Coach mode.", "success");
+        setStatus("Trade saved. You can view it in Trades & analyze it in Coach.", "success");
 
-        // Clear non-time fields (keep enteredAt as-is if you want)
+        // Clear non-time fields
         reasonOpenInput.value = "";
         reasonCloseInput.value = "";
         exitedAtInput.value = "";
@@ -563,6 +700,120 @@
         logSubmitBtn.disabled = false;
       }
     });
+
+    // ===== Trades mode =====
+    const tradesSummary = document.getElementById("trades-summary");
+    const tradesEmpty = document.getElementById("trades-empty");
+    const tradesTable = document.getElementById("trades-table");
+    const tradesTbody = document.getElementById("trades-tbody");
+    const tradesRefreshBtn = document.getElementById("trades-refresh-btn");
+
+    tradesRefreshBtn.addEventListener("click", () => loadTrades());
+
+    function formatDateShort(iso) {
+      if (!iso) return "-";
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString(undefined, {
+        year: "2-digit",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    function outcomeToBadge(outcome) {
+      if (!outcome) return "";
+      const span = document.createElement("span");
+      span.className = "badge " + outcome.toLowerCase();
+      span.textContent = outcome.toLowerCase();
+      return span;
+    }
+
+    async function loadTrades() {
+      tradesRefreshBtn.disabled = true;
+      tradesSummary.textContent = "Loading…";
+
+      try {
+        const res = await fetch(`${API_BASE}/trades`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const trades = data.trades || [];
+
+        tradesTbody.innerHTML = "";
+
+        if (!trades.length) {
+          tradesEmpty.style.display = "block";
+          tradesTable.style.display = "none";
+          tradesSummary.textContent = "No trades yet.";
+          return;
+        }
+
+        tradesEmpty.style.display = "none";
+        tradesTable.style.display = "table";
+
+        trades.forEach((t) => {
+          const tr = document.createElement("tr");
+
+          const tdEntered = document.createElement("td");
+          tdEntered.textContent = formatDateShort(t.enteredAt);
+
+          const tdExited = document.createElement("td");
+          tdExited.textContent = formatDateShort(t.exitedAt);
+
+          const tdOutcome = document.createElement("td");
+          const badge = outcomeToBadge(t.outcome);
+          if (badge) tdOutcome.appendChild(badge);
+
+          const tdRisked = document.createElement("td");
+          tdRisked.textContent =
+            t.percentRisked === null || t.percentRisked === undefined
+              ? "-"
+              : t.percentRisked.toFixed(2);
+
+          const tdReturn = document.createElement("td");
+          tdReturn.textContent =
+            t.percentReturn === null || t.percentReturn === undefined
+              ? "-"
+              : t.percentReturn.toFixed(2);
+
+          const tdReasonOpen = document.createElement("td");
+          tdReasonOpen.className = "trade-reason";
+          tdReasonOpen.title = t.reasonOpen || "";
+          tdReasonOpen.textContent = t.reasonOpen || "";
+
+          const tdReasonClose = document.createElement("td");
+          tdReasonClose.className = "trade-reason";
+          tdReasonClose.title = t.reasonClose || "";
+          tdReasonClose.textContent = t.reasonClose || "";
+
+          tr.appendChild(tdEntered);
+          tr.appendChild(tdExited);
+          tr.appendChild(tdOutcome);
+          tr.appendChild(tdRisked);
+          tr.appendChild(tdReturn);
+          tr.appendChild(tdReasonOpen);
+          tr.appendChild(tdReasonClose);
+
+          tradesTbody.appendChild(tr);
+        });
+
+        tradesSummary.textContent = `Showing ${trades.length} trade${trades.length === 1 ? "" : "s"} (latest first)`;
+      } catch (err) {
+        console.error(err);
+        tradesSummary.textContent = "Failed to load trades.";
+        tradesEmpty.style.display = "block";
+        tradesEmpty.textContent = "Failed to load trades: " + (err.message || err);
+        tradesTable.style.display = "none";
+      } finally {
+        tradesRefreshBtn.disabled = false;
+      }
+    }
   </script>
 </body>
 </html>

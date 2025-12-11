@@ -51,4 +51,10 @@ Example return:
 
 **WEB APP**
 
-Visit web app on https://684f16c5.trade-journal.pages.dev
+Visit web app on https://7312e8d6.trade-journal.pages.dev/
+
+Log trades with the Log Trade Interface
+
+View current trades on the Trades Interface
+
+Chat with the Llama AI on the Coach Interface
