@@ -80,3 +80,12 @@ the app already works when deployed and displays hello world.}
 };
 
 this is a llama app with cf}
+
+4.now we have to add user input via chat using cloudflare pages
+
+5.now lets add a log trade mode
+
+6. fix cors issues and give me commands to deploy the website to pages directly
+
+7. now add another tab to view the trades on the pages
+

@@ -28,7 +28,16 @@ function json(body, status = 200, extraHeaders = {}) {
   
 	  // CORS preflight
 	  if (request.method === "OPTIONS") {
-		return json({}, 204);
+		const reqHeaders =
+		  request.headers.get("Access-Control-Request-Headers") || "";
+		return new Response(null, {
+		  status: 204,
+		  headers: {
+			"access-control-allow-origin": "*",
+			"access-control-allow-methods": "GET,POST,OPTIONS",
+			"access-control-allow-headers": reqHeaders || "Content-Type",
+		  },
+		});
 	  }
   
 	  try {
